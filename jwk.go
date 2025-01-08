@@ -51,6 +51,7 @@ func Import(key *ecdh.PublicKey) (*JWK, error) {
 	}
 }
 
+// Export converts a JWK to an ecdh.PublicKey.
 func Export(jwk *JWK) (*ecdh.PublicKey, error) {
 	switch jwk.Kty {
 	case "OKP":

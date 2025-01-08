@@ -14,14 +14,37 @@ import (
 	josecipher "github.com/go-jose/go-jose/v4/cipher"
 )
 
+const (
+	// KeyEncryptionAlgorithm is the key encryption algorithm.
+	KeyEncryptionAlgorithm = "ECDH-1PU+A256KW"
+	// ContentEncryptionAlgorithm is the content encryption algorithm.
+	ContentEncryptionAlgorithm = "A256CBC-HS512"
+)
+
+const (
+	HeaderKeyAlg  = "alg"
+	HeaderKeyEnc  = "enc"
+	HeaderKeyApu  = "apu"
+	HeaderKeyApv  = "apv"
+	HeaderKeyEpk  = "epk"
+	HeaderKeySkid = "skid"
+	HeaderKeyKid  = "kid"
+)
+
+// PrivateKeyResolver resolves a private key by its key ID.
 type PrivateKeyResolver func(kid string) (*ecdh.PrivateKey, error)
+
+// PublicKeyResolver resolves a public key by its key ID.
 type PublicKeyResolver func(kid string) (*ecdh.PublicKey, error)
 
+// Encrypter encrypts plaintext using the ECDH-1PU+A256KW and A256CBC-HS512 algorithms.
+// Supported curves are X25519 and P384.
 type Encrypter struct {
 	recipientResolver PublicKeyResolver
 	senderResolver    PrivateKeyResolver
 }
 
+// NewEncrypter creates a new Encrypter.
 func NewEncrypter(
 	recipientResolver PublicKeyResolver,
 	senderResolver PrivateKeyResolver,
@@ -32,6 +55,7 @@ func NewEncrypter(
 	}
 }
 
+// Encrypt encrypts a plaintext using the ECDH-1PU+A256KW and A256CBC-HS512 algorithms.
 func (e *Encrypter) Encrypt(recipientKid, senderKid string, plaintext []byte) (string, error) {
 	recipient, err := e.recipientResolver(recipientKid)
 	if err != nil {
@@ -147,11 +171,14 @@ func WithSkid(skid string) decryptionOption {
 	}
 }
 
+// Decrypter decrypts a compact token. 
+// Supported curves are X25519 and P384.
 type Decrypter struct {
 	recipientResolver PrivateKeyResolver
 	senderResolver    PublicKeyResolver
 }
 
+// NewDecrypter creates a new Decrypter.
 func NewDecrypter(
 	recipientResolver PrivateKeyResolver,
 	senderResolver PublicKeyResolver,
@@ -175,14 +202,14 @@ func (d *Decrypter) Decrypt(compactToken string, opts ...decryptionOption) ([]by
 	}
 
 	o := &decrypterOptions{
-		kid:  headers["kid"],
-		skid: headers["skid"],
+		kid:  headers[HeaderKeyKid],
+		skid: headers[HeaderKeySkid],
 	}
 	for _, opt := range opts {
 		opt(o)
 	}
 
-	e, ok := headers["epk"]
+	e, ok := headers[HeaderKeyEpk]
 	if !ok {
 		return nil, errors.New("epk not found in headers")
 	}
@@ -283,13 +310,13 @@ func getHeaders(
 	apvHash := sha256.Sum256(recipient.Bytes())
 
 	headers := map[string]string{}
-	headers["alg"] = "ECDH-1PU+A256KW"
-	headers["enc"] = "A256CBC-HS512"
-	headers["apu"] = base64.URLEncoding.EncodeToString(apuHash[:])
-	headers["apv"] = base64.URLEncoding.EncodeToString(apvHash[:])
-	headers["epk"] = string(epkstr)
-	headers["skid"] = skid
-	headers["kid"] = kid
+	headers[HeaderKeyAlg] = KeyEncryptionAlgorithm
+	headers[HeaderKeyEnc] = ContentEncryptionAlgorithm
+	headers[HeaderKeyApu] = base64.URLEncoding.EncodeToString(apuHash[:])
+	headers[HeaderKeyApv] = base64.URLEncoding.EncodeToString(apvHash[:])
+	headers[HeaderKeyEpk] = string(epkstr)
+	headers[HeaderKeySkid] = skid
+	headers[HeaderKeyKid] = kid
 
 	return headers, nil
 }
