@@ -65,4 +65,7 @@ issues:
     - text: "appendAssign: *"
       linters:
         - gocritic
+    - text: "fieldalignment: struct with *"
+      linters:
+        - govet
   exclude-use-default: false
