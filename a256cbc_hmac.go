@@ -171,8 +171,7 @@ func WithSkid(skid string) decryptionOption {
 	}
 }
 
-// Decrypter decrypts a compact token. 
-// Supported curves are X25519 and P384.
+// Decrypter decrypts a compact token. Supported curves are X25519 and P384.
 type Decrypter struct {
 	recipientResolver PrivateKeyResolver
 	senderResolver    PublicKeyResolver
