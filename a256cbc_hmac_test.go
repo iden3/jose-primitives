@@ -3,29 +3,13 @@ package joseprimitives
 import (
 	"crypto/ecdh"
 	"crypto/rand"
-	"fmt"
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
-
-func privateKeyresolver(priv *ecdh.PrivateKey, kidclosure string) func(string) (*ecdh.PrivateKey, error) {
-	return func(kid string) (*ecdh.PrivateKey, error) {
-		if kid != kidclosure {
-			return nil, fmt.Errorf("kid '%s' not found", kid)
-		}
-		return priv, nil
-	}
-}
-
-func publicKeyResolver(pub *ecdh.PublicKey, kidclosure string) func(string) (*ecdh.PublicKey, error) {
-	return func(kid string) (*ecdh.PublicKey, error) {
-		if kid != kidclosure {
-			return nil, fmt.Errorf("kid '%s' not found", kid)
-		}
-		return pub, nil
-	}
-}
 
 func mustGenerateKey(t *testing.T, c ecdh.Curve) *ecdh.PrivateKey {
 	var (
@@ -51,51 +35,58 @@ func mustGenerateKey(t *testing.T, c ecdh.Curve) *ecdh.PrivateKey {
 
 func TestEncryptDecryptPxx(t *testing.T) {
 	tests := []struct {
-		name             string
-		recipient        *ecdh.PrivateKey
-		sender           *ecdh.PrivateKey
-		plaintext        string
-		encryptExpectErr bool
-		decryptExpectErr bool
+		name              string
+		recipient         *ecdh.PrivateKey
+		sender            *ecdh.PrivateKey
+		plaintext         string
+		encriptionOptions []encryptionOption
+		expectedHeaders   map[string]interface{}
 	}{
 		{
-			name:             "Valid encryption and decryption: P-384",
-			recipient:        mustGenerateKey(t, ecdh.P384()),
-			sender:           mustGenerateKey(t, ecdh.P384()),
-			plaintext:        "plaintext",
-			encryptExpectErr: false,
-			decryptExpectErr: false,
+			name:      "Valid encryption and decryption: P-384",
+			recipient: mustGenerateKey(t, ecdh.P384()),
+			sender:    mustGenerateKey(t, ecdh.P384()),
+			plaintext: "plaintext",
+			encriptionOptions: []encryptionOption{
+				WithKid("kid"),
+				WithSkid("skid"),
+			},
+			expectedHeaders: map[string]interface{}{
+				HeaderKeyKid:  "kid",
+				HeaderKeySkid: "skid",
+			},
 		},
 		{
-			name:             "Valid encryption and decryption: x25519",
-			recipient:        mustGenerateKey(t, ecdh.X25519()),
-			sender:           mustGenerateKey(t, ecdh.X25519()),
-			plaintext:        "plaintext",
-			encryptExpectErr: false,
-			decryptExpectErr: false,
+			name:      "Valid encryption and decryption: x25519",
+			recipient: mustGenerateKey(t, ecdh.X25519()),
+			sender:    mustGenerateKey(t, ecdh.X25519()),
+			plaintext: "plaintext",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			encrypter := NewEncrypter(
-				publicKeyResolver(tt.recipient.PublicKey(), "did:recipient"),
-				privateKeyresolver(tt.sender, "did:sender"),
-			)
-			jweToken, err := encrypter.Encrypt("did:recipient", "did:sender", []byte(tt.plaintext))
-			if tt.encryptExpectErr {
-				require.Error(t, err)
-				return
-			}
+			jweToken, err := Encrypt(
+				tt.recipient.PublicKey(), tt.sender, []byte(tt.plaintext), tt.encriptionOptions...)
 			require.NoError(t, err)
 
-			decrypter := NewDecrypter(
-				privateKeyresolver(tt.recipient, "did:recipient"),
-				publicKeyResolver(tt.sender.PublicKey(), "did:sender"),
-			)
-			raw, err := decrypter.Decrypt(jweToken)
+			h := decodeHeaders(t, jweToken)
+			require.Equal(t, tt.expectedHeaders[HeaderKeyKid], h[HeaderKeyKid])
+			require.Equal(t, tt.expectedHeaders[HeaderKeySkid], h[HeaderKeySkid])
+
+			raw, err := Decrypt(tt.recipient, tt.sender.PublicKey(), jweToken)
 			require.NoError(t, err)
 			require.Equal(t, tt.plaintext, string(raw))
 		})
 	}
+}
+
+func decodeHeaders(t *testing.T, token string) map[string]interface{} {
+	var h map[string]interface{}
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 5)
+	headersBytes, err := base64.URLEncoding.DecodeString(parts[0])
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(headersBytes, &h))
+	return h
 }

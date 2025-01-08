@@ -31,41 +31,29 @@ const (
 	HeaderKeyKid  = "kid"
 )
 
-// PrivateKeyResolver resolves a private key by its key ID.
-type PrivateKeyResolver func(kid string) (*ecdh.PrivateKey, error)
+type encryptionOption func(*encryptionOptions)
 
-// PublicKeyResolver resolves a public key by its key ID.
-type PublicKeyResolver func(kid string) (*ecdh.PublicKey, error)
-
-// Encrypter encrypts plaintext using the ECDH-1PU+A256KW and A256CBC-HS512 algorithms.
-// Supported curves are X25519 and P384.
-type Encrypter struct {
-	recipientResolver PublicKeyResolver
-	senderResolver    PrivateKeyResolver
+type encryptionOptions struct {
+	kid  string
+	skid string
 }
 
-// NewEncrypter creates a new Encrypter.
-func NewEncrypter(
-	recipientResolver PublicKeyResolver,
-	senderResolver PrivateKeyResolver,
-) *Encrypter {
-	return &Encrypter{
-		recipientResolver: recipientResolver,
-		senderResolver:    senderResolver,
+// WithKid sets the 'kid' option.
+func WithKid(kid string) encryptionOption {
+	return func(opts *encryptionOptions) {
+		opts.kid = kid
+	}
+}
+
+// WithSkid sets the 'skid' option.
+func WithSkid(skid string) encryptionOption {
+	return func(opts *encryptionOptions) {
+		opts.skid = skid
 	}
 }
 
 // Encrypt encrypts a plaintext using the ECDH-1PU+A256KW and A256CBC-HS512 algorithms.
-func (e *Encrypter) Encrypt(recipientKid, senderKid string, plaintext []byte) (string, error) {
-	recipient, err := e.recipientResolver(recipientKid)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve recipient key: %w", err)
-	}
-	sender, err := e.senderResolver(senderKid)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve sender key: %w", err)
-	}
-
+func Encrypt(recipient *ecdh.PublicKey, sender *ecdh.PrivateKey, plaintext []byte, opts ...encryptionOption) (string, error) {
 	if recipient.Curve() != sender.Curve() {
 		return "",
 			fmt.Errorf(
@@ -74,7 +62,16 @@ func (e *Encrypter) Encrypt(recipientKid, senderKid string, plaintext []byte) (s
 			)
 	}
 
-	var epk *ecdh.PrivateKey
+	o := &encryptionOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	var (
+		epk *ecdh.PrivateKey
+		err error
+	)
+
 	switch recipient.Curve() {
 	case ecdh.X25519():
 		epk, err = ecdh.X25519().GenerateKey(rand.Reader)
@@ -114,7 +111,7 @@ func (e *Encrypter) Encrypt(recipientKid, senderKid string, plaintext []byte) (s
 		return "", fmt.Errorf("failed to create encrypter: %w", err)
 	}
 	add, err := getHeaders(
-		senderKid, recipientKid, recipient, sender, epk)
+		o.skid, o.kid, recipient, sender, epk)
 	if err != nil {
 		return "", fmt.Errorf("failed to create headers: %w", err)
 	}
@@ -150,46 +147,8 @@ func (e *Encrypter) Encrypt(recipientKid, senderKid string, plaintext []byte) (s
 	return compactToken, nil
 }
 
-type decryptionOption func(*decrypterOptions)
-
-type decrypterOptions struct {
-	kid  string
-	skid string
-}
-
-// WithKid sets the 'kid' option.
-func WithKid(kid string) decryptionOption {
-	return func(opts *decrypterOptions) {
-		opts.kid = kid
-	}
-}
-
-// WithSkid sets the 'skid' option.
-func WithSkid(skid string) decryptionOption {
-	return func(opts *decrypterOptions) {
-		opts.skid = skid
-	}
-}
-
-// Decrypter decrypts a compact token. Supported curves are X25519 and P384.
-type Decrypter struct {
-	recipientResolver PrivateKeyResolver
-	senderResolver    PublicKeyResolver
-}
-
-// NewDecrypter creates a new Decrypter.
-func NewDecrypter(
-	recipientResolver PrivateKeyResolver,
-	senderResolver PublicKeyResolver,
-) *Decrypter {
-	return &Decrypter{
-		recipientResolver: recipientResolver,
-		senderResolver:    senderResolver,
-	}
-}
-
 // Decrypt decrypts a compact token.
-func (d *Decrypter) Decrypt(compactToken string, opts ...decryptionOption) ([]byte, error) {
+func Decrypt(recipient *ecdh.PrivateKey, sender *ecdh.PublicKey, compactToken string) ([]byte, error) {
 	headersBytes, encryptedCek, nonce, ciphertext, authTag, err := parseCompactToken(compactToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse compact token: %w", err)
@@ -198,14 +157,6 @@ func (d *Decrypter) Decrypt(compactToken string, opts ...decryptionOption) ([]by
 	headers := map[string]string{}
 	if err = json.Unmarshal(headersBytes, &headers); err != nil {
 		return nil, fmt.Errorf("failed to decode headers: %w", err)
-	}
-
-	o := &decrypterOptions{
-		kid:  headers[HeaderKeyKid],
-		skid: headers[HeaderKeySkid],
-	}
-	for _, opt := range opts {
-		opt(o)
 	}
 
 	e, ok := headers[HeaderKeyEpk]
@@ -220,14 +171,6 @@ func (d *Decrypter) Decrypt(compactToken string, opts ...decryptionOption) ([]by
 	ephemeral, err := Export(epkjwk)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export epk: %w", err)
-	}
-	recipient, err := d.recipientResolver(o.kid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve recipient: %w", err)
-	}
-	sender, err := d.senderResolver(o.skid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve sender: %w", err)
 	}
 
 	kek, err := NewECDHPU1Key(ZxKeyPair{p: recipient, pub: ephemeral}, ZxKeyPair{p: recipient, pub: sender})
@@ -314,8 +257,13 @@ func getHeaders(
 	headers[HeaderKeyApu] = base64.URLEncoding.EncodeToString(apuHash[:])
 	headers[HeaderKeyApv] = base64.URLEncoding.EncodeToString(apvHash[:])
 	headers[HeaderKeyEpk] = string(epkstr)
-	headers[HeaderKeySkid] = skid
-	headers[HeaderKeyKid] = kid
+
+	if skid != "" {
+		headers[HeaderKeySkid] = skid
+	}
+	if kid != "" {
+		headers[HeaderKeyKid] = kid
+	}
 
 	return headers, nil
 }
