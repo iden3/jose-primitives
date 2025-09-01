@@ -62,6 +62,7 @@ func NewECDHPU1Key(zeKeyPair, zsKeyPair ZxKeyPair) (*ECDHPU1Key, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate shared zs secret: %w", err)
 	}
+	//nolint:gocritic // ignore appendAssign
 	z := append(ze, zs...)
 
 	empty := make([]byte, 0)

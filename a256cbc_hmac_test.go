@@ -34,6 +34,7 @@ func mustGenerateKey(t *testing.T, c ecdh.Curve) *ecdh.PrivateKey {
 }
 
 func TestEncryptDecryptPxx(t *testing.T) {
+	//nolint:govet // ignore struct size
 	tests := []struct {
 		name              string
 		recipient         *ecdh.PrivateKey
