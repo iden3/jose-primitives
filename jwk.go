@@ -15,6 +15,7 @@ import (
 
 // JWK represents a JSON Web Key.
 type JWK struct {
+	Kid string `json:"kid,omitempty"`
 	Kty string `json:"kty"`
 	Crv string `json:"crv"`
 	X   string `json:"x"`
