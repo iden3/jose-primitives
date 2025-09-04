@@ -270,7 +270,7 @@ func getHeaders(
 
 func extractAuthTag(ciphertextWithAuthTag []byte, plaintextLength, blockSize, authTagLength int) (
 	ciphertext []byte, authTag []byte, err error) {
-	paddedLength := (plaintextLength + blockSize - 1) / blockSize * blockSize
+	paddedLength := (plaintextLength + blockSize) / blockSize * blockSize
 
 	if len(ciphertextWithAuthTag) < paddedLength+authTagLength {
 		return nil, nil, errors.New("invalid ciphertext length")
