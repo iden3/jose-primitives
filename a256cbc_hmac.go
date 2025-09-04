@@ -130,10 +130,9 @@ func Encrypt(recipient *ecdh.PublicKey, sender *ecdh.PrivateKey, plaintext []byt
 		return "", fmt.Errorf("failed to wrap cek: %w", err)
 	}
 
-	noAuthCiphertext, authTag, err := extractAuthTag(ciphertext, len(plaintext), aes.BlockSize, len(cek)/2)
-	if err != nil {
-		return "", fmt.Errorf("failed to extract auth tag: %w", err)
-	}
+	authTagLength := len(cek) / 2
+	noAuthCiphertext := ciphertext[:len(ciphertext)-authTagLength]
+	authtag := ciphertext[len(ciphertext)-authTagLength:]
 
 	compactToken := fmt.Sprintf(
 		"%s.%s.%s.%s.%s",
@@ -141,7 +140,7 @@ func Encrypt(recipient *ecdh.PublicKey, sender *ecdh.PrivateKey, plaintext []byt
 		base64.URLEncoding.EncodeToString(encryptedCek),
 		base64.URLEncoding.EncodeToString(nonce),
 		base64.URLEncoding.EncodeToString(noAuthCiphertext),
-		base64.URLEncoding.EncodeToString(authTag),
+		base64.URLEncoding.EncodeToString(authtag),
 	)
 
 	return compactToken, nil
@@ -266,18 +265,4 @@ func getHeaders(
 	}
 
 	return headers, nil
-}
-
-func extractAuthTag(ciphertextWithAuthTag []byte, plaintextLength, blockSize, authTagLength int) (
-	ciphertext []byte, authTag []byte, err error) {
-	paddedLength := (plaintextLength + blockSize) / blockSize * blockSize
-
-	if len(ciphertextWithAuthTag) < paddedLength+authTagLength {
-		return nil, nil, errors.New("invalid ciphertext length")
-	}
-
-	ciphertext = ciphertextWithAuthTag[:paddedLength]
-	authTag = ciphertextWithAuthTag[paddedLength : paddedLength+authTagLength]
-
-	return ciphertext, authTag, nil
 }
