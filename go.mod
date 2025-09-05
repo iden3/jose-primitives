@@ -5,8 +5,8 @@ go 1.22.6
 toolchain go1.22.10
 
 require (
-	github.com/go-jose/go-jose/v4 v4.0.4
-	github.com/stretchr/testify v1.9.0
+	github.com/go-jose/go-jose/v4 v4.0.5
+	github.com/stretchr/testify v1.10.0
 )
 
 require (

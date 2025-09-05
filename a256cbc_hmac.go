@@ -270,7 +270,16 @@ func getHeaders(
 
 func extractAuthTag(ciphertextWithAuthTag []byte, plaintextLength, blockSize, authTagLength int) (
 	ciphertext []byte, authTag []byte, err error) {
-	paddedLength := (plaintextLength + blockSize - 1) / blockSize * blockSize
+	var paddedLength int
+	remainder := plaintextLength % blockSize
+	if remainder == 0 {
+		// regaring go-jose implementation we should always add padding
+		// even if the plaintext is already aligned to the block size
+		// https://github.com/go-jose/go-jose/blob/9860c65054c4821d1e7c22200422b04181f58ebc/cipher/cbc_hmac.go#L169
+		paddedLength = plaintextLength + blockSize
+	} else {
+		paddedLength = plaintextLength + blockSize - remainder
+	}
 
 	if len(ciphertextWithAuthTag) < paddedLength+authTagLength {
 		return nil, nil, errors.New("invalid ciphertext length")
