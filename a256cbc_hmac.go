@@ -34,9 +34,9 @@ const (
 type encryptionOption func(*encryptionOptions)
 
 type encryptionOptions struct {
+	extraHeaders map[string]string
 	kid          string
 	skid         string
-	extraHeaders map[string]string
 }
 
 // WithKid sets the 'kid' option.
