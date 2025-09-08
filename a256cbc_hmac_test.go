@@ -63,6 +63,24 @@ func TestEncryptDecryptPxx(t *testing.T) {
 			sender:    mustGenerateKey(t, ecdh.X25519()),
 			plaintext: "plaintext",
 		},
+		{
+			name:      "Valid encryption and decryption: With custom headers",
+			recipient: mustGenerateKey(t, ecdh.P384()),
+			sender:    mustGenerateKey(t, ecdh.P384()),
+			plaintext: "plaintext",
+			encriptionOptions: []encryptionOption{
+				WithCustomHeaders(map[string]string{
+					"custom-header": "custom-value",
+				}),
+				WithKid("kid"),
+				WithSkid("skid"),
+			},
+			expectedHeaders: map[string]interface{}{
+				"custom-header": "custom-value",
+				HeaderKeyKid:    "kid",
+				HeaderKeySkid:   "skid",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -72,8 +90,9 @@ func TestEncryptDecryptPxx(t *testing.T) {
 			require.NoError(t, err)
 
 			h := decodeHeaders(t, jweToken)
-			require.Equal(t, tt.expectedHeaders[HeaderKeyKid], h[HeaderKeyKid])
-			require.Equal(t, tt.expectedHeaders[HeaderKeySkid], h[HeaderKeySkid])
+			for k, v := range tt.expectedHeaders {
+				require.Equal(t, v, h[k])
+			}
 
 			raw, err := Decrypt(tt.recipient, tt.sender.PublicKey(), jweToken)
 			require.NoError(t, err)
