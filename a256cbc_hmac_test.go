@@ -86,7 +86,7 @@ func decodeHeaders(t *testing.T, token string) map[string]interface{} {
 	var h map[string]interface{}
 	parts := strings.Split(token, ".")
 	require.Len(t, parts, 5)
-	headersBytes, err := base64.URLEncoding.DecodeString(parts[0])
+	headersBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(headersBytes, &h))
 	return h

@@ -137,11 +137,11 @@ func Encrypt(recipient *ecdh.PublicKey, sender *ecdh.PrivateKey, plaintext []byt
 
 	compactToken := fmt.Sprintf(
 		"%s.%s.%s.%s.%s",
-		base64.URLEncoding.EncodeToString(headersBytes),
-		base64.URLEncoding.EncodeToString(encryptedCek),
-		base64.URLEncoding.EncodeToString(nonce),
-		base64.URLEncoding.EncodeToString(noAuthCiphertext),
-		base64.URLEncoding.EncodeToString(authTag),
+		base64.RawURLEncoding.EncodeToString(headersBytes),
+		base64.RawURLEncoding.EncodeToString(encryptedCek),
+		base64.RawURLEncoding.EncodeToString(nonce),
+		base64.RawURLEncoding.EncodeToString(noAuthCiphertext),
+		base64.RawURLEncoding.EncodeToString(authTag),
 	)
 
 	return compactToken, nil
@@ -204,27 +204,27 @@ func parseCompactToken(compactToken string) (headers, encryptedCek, nonce, ciphe
 		return nil, nil, nil, nil, nil, errors.New("invalid compact token")
 	}
 
-	headers, err = base64.URLEncoding.DecodeString(parts[0])
+	headers, err = base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to decode headers: %w", err)
 	}
 
-	encryptedCek, err = base64.URLEncoding.DecodeString(parts[1])
+	encryptedCek, err = base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to decode encrypted cek: %w", err)
 	}
 
-	nonce, err = base64.URLEncoding.DecodeString(parts[2])
+	nonce, err = base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to decode nonce: %w", err)
 	}
 
-	ciphertext, err = base64.URLEncoding.DecodeString(parts[3])
+	ciphertext, err = base64.RawURLEncoding.DecodeString(parts[3])
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to decode ciphertext: %w", err)
 	}
 
-	authTag, err = base64.URLEncoding.DecodeString(parts[4])
+	authTag, err = base64.RawURLEncoding.DecodeString(parts[4])
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to decode auth tag: %w", err)
 	}
@@ -254,8 +254,8 @@ func getHeaders(
 	headers := map[string]string{}
 	headers[HeaderKeyAlg] = KeyEncryptionAlgorithm
 	headers[HeaderKeyEnc] = ContentEncryptionAlgorithm
-	headers[HeaderKeyApu] = base64.URLEncoding.EncodeToString(apuHash[:])
-	headers[HeaderKeyApv] = base64.URLEncoding.EncodeToString(apvHash[:])
+	headers[HeaderKeyApu] = base64.RawURLEncoding.EncodeToString(apuHash[:])
+	headers[HeaderKeyApv] = base64.RawURLEncoding.EncodeToString(apvHash[:])
 	headers[HeaderKeyEpk] = string(epkstr)
 
 	if skid != "" {
