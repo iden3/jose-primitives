@@ -49,8 +49,8 @@ func TestEncryptDecryptPxx(t *testing.T) {
 			sender:    mustGenerateKey(t, ecdh.P384()),
 			plaintext: "plaintext",
 			encriptionOptions: []encryptionOption{
-				WithKid("kid"),
-				WithSkid("skid"),
+				WithKidHeader("kid"),
+				WithSkidHeader("skid"),
 			},
 			expectedHeaders: map[string]interface{}{
 				HeaderKeyKid:  "kid",
@@ -72,13 +72,25 @@ func TestEncryptDecryptPxx(t *testing.T) {
 				WithCustomHeaders(map[string]string{
 					"custom-header": "custom-value",
 				}),
-				WithKid("kid"),
-				WithSkid("skid"),
+				WithKidHeader("kid"),
+				WithSkidHeader("skid"),
 			},
 			expectedHeaders: map[string]interface{}{
 				"custom-header": "custom-value",
 				HeaderKeyKid:    "kid",
 				HeaderKeySkid:   "skid",
+			},
+		},
+		{
+			name:      "Valid encryption and decryption: With typ header only",
+			recipient: mustGenerateKey(t, ecdh.P384()),
+			sender:    mustGenerateKey(t, ecdh.P384()),
+			plaintext: "plaintext",
+			encriptionOptions: []encryptionOption{
+				WithTypeHeader("crypto-envelope"),
+			},
+			expectedHeaders: map[string]interface{}{
+				HeaderKeyType: "crypto-envelope",
 			},
 		},
 	}

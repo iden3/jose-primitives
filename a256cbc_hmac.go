@@ -29,6 +29,7 @@ const (
 	HeaderKeyEpk  = "epk"
 	HeaderKeySkid = "skid"
 	HeaderKeyKid  = "kid"
+	HeaderKeyType = "typ"
 )
 
 type encryptionOption func(*encryptionOptions)
@@ -37,17 +38,18 @@ type encryptionOptions struct {
 	extraHeaders map[string]string
 	kid          string
 	skid         string
+	typ          string
 }
 
-// WithKid sets the 'kid' option.
-func WithKid(kid string) encryptionOption {
+// WithKidHeader sets the 'kid' option.
+func WithKidHeader(kid string) encryptionOption {
 	return func(opts *encryptionOptions) {
 		opts.kid = kid
 	}
 }
 
-// WithSkid sets the 'skid' option.
-func WithSkid(skid string) encryptionOption {
+// WithSkidHeader sets the 'skid' option.
+func WithSkidHeader(skid string) encryptionOption {
 	return func(opts *encryptionOptions) {
 		opts.skid = skid
 	}
@@ -57,6 +59,13 @@ func WithSkid(skid string) encryptionOption {
 func WithCustomHeaders(headers map[string]string) encryptionOption {
 	return func(opts *encryptionOptions) {
 		opts.extraHeaders = headers
+	}
+}
+
+// WithTypeHeader sets the 'typ' header.
+func WithTypeHeader(typ string) encryptionOption {
+	return func(opts *encryptionOptions) {
+		opts.typ = typ
 	}
 }
 
@@ -119,7 +128,7 @@ func Encrypt(recipient *ecdh.PublicKey, sender *ecdh.PrivateKey, plaintext []byt
 		return "", fmt.Errorf("failed to create encrypter: %w", err)
 	}
 	add, err := getHeaders(
-		o.skid, o.kid, recipient, sender, epk, o.extraHeaders)
+		o.skid, o.kid, o.typ, recipient, sender, epk, o.extraHeaders)
 	if err != nil {
 		return "", fmt.Errorf("failed to create headers: %w", err)
 	}
@@ -245,7 +254,7 @@ func parseCompactToken(compactToken string) (headers, encryptedCek, nonce, ciphe
 }
 
 func getHeaders(
-	skid, kid string,
+	skid, kid, typ string,
 	recipient *ecdh.PublicKey,
 	sender *ecdh.PrivateKey,
 	epk *ecdh.PrivateKey,
@@ -272,6 +281,9 @@ func getHeaders(
 	}
 	if kid != "" {
 		headers[HeaderKeyKid] = kid
+	}
+	if typ != "" {
+		headers[HeaderKeyType] = typ
 	}
 
 	for k, v := range extraHeaders {
