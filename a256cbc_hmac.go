@@ -29,26 +29,43 @@ const (
 	HeaderKeyEpk  = "epk"
 	HeaderKeySkid = "skid"
 	HeaderKeyKid  = "kid"
+	HeaderKeyType = "typ"
 )
 
 type encryptionOption func(*encryptionOptions)
 
 type encryptionOptions struct {
-	kid  string
-	skid string
+	extraHeaders map[string]string
+	kid          string
+	skid         string
+	typ          string
 }
 
-// WithKid sets the 'kid' option.
-func WithKid(kid string) encryptionOption {
+// WithKidHeader sets the 'kid' option.
+func WithKidHeader(kid string) encryptionOption {
 	return func(opts *encryptionOptions) {
 		opts.kid = kid
 	}
 }
 
-// WithSkid sets the 'skid' option.
-func WithSkid(skid string) encryptionOption {
+// WithSkidHeader sets the 'skid' option.
+func WithSkidHeader(skid string) encryptionOption {
 	return func(opts *encryptionOptions) {
 		opts.skid = skid
+	}
+}
+
+// WithCustomHeaders sets custom headers to be included in the token.
+func WithCustomHeaders(headers map[string]string) encryptionOption {
+	return func(opts *encryptionOptions) {
+		opts.extraHeaders = headers
+	}
+}
+
+// WithTypeHeader sets the 'typ' header.
+func WithTypeHeader(typ string) encryptionOption {
+	return func(opts *encryptionOptions) {
+		opts.typ = typ
 	}
 }
 
@@ -111,7 +128,7 @@ func Encrypt(recipient *ecdh.PublicKey, sender *ecdh.PrivateKey, plaintext []byt
 		return "", fmt.Errorf("failed to create encrypter: %w", err)
 	}
 	add, err := getHeaders(
-		o.skid, o.kid, recipient, sender, epk)
+		o.skid, o.kid, o.typ, recipient, sender, epk, o.extraHeaders)
 	if err != nil {
 		return "", fmt.Errorf("failed to create headers: %w", err)
 	}
@@ -154,7 +171,7 @@ func Decrypt(recipient *ecdh.PrivateKey, sender *ecdh.PublicKey, compactToken st
 		return nil, fmt.Errorf("failed to parse compact token: %w", err)
 	}
 
-	headers := map[string]string{}
+	headers := map[string]any{}
 	if err = json.Unmarshal(headersBytes, &headers); err != nil {
 		return nil, fmt.Errorf("failed to decode headers: %w", err)
 	}
@@ -163,8 +180,12 @@ func Decrypt(recipient *ecdh.PrivateKey, sender *ecdh.PublicKey, compactToken st
 	if !ok {
 		return nil, errors.New("epk not found in headers")
 	}
+	epkBytes, err := json.Marshal(e)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal epk: %w", err)
+	}
 	epkjwk := &JWK{}
-	if err = json.Unmarshal([]byte(e), epkjwk); err != nil {
+	if err = json.Unmarshal(epkBytes, epkjwk); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal epk: %w", err)
 	}
 
@@ -233,36 +254,40 @@ func parseCompactToken(compactToken string) (headers, encryptedCek, nonce, ciphe
 }
 
 func getHeaders(
-	skid, kid string,
+	skid, kid, typ string,
 	recipient *ecdh.PublicKey,
 	sender *ecdh.PrivateKey,
 	epk *ecdh.PrivateKey,
-) (map[string]string, error) {
+	extraHeaders map[string]string,
+) (map[string]any, error) {
 	epkjwk, err := Import(epk.PublicKey())
 	if err != nil {
 		return nil, fmt.Errorf("failed to import epk to jwt: %w", err)
-	}
-	epkstr, err := json.Marshal(epkjwk)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode epk: %w", err)
 	}
 
 	apuBytes := append(epk.PublicKey().Bytes(), sender.PublicKey().Bytes()...)
 	apuHash := sha256.Sum256(apuBytes)
 	apvHash := sha256.Sum256(recipient.Bytes())
 
-	headers := map[string]string{}
+	headers := map[string]any{}
 	headers[HeaderKeyAlg] = KeyEncryptionAlgorithm
 	headers[HeaderKeyEnc] = ContentEncryptionAlgorithm
 	headers[HeaderKeyApu] = base64.RawURLEncoding.EncodeToString(apuHash[:])
 	headers[HeaderKeyApv] = base64.RawURLEncoding.EncodeToString(apvHash[:])
-	headers[HeaderKeyEpk] = string(epkstr)
+	headers[HeaderKeyEpk] = epkjwk
 
 	if skid != "" {
 		headers[HeaderKeySkid] = skid
 	}
 	if kid != "" {
 		headers[HeaderKeyKid] = kid
+	}
+	if typ != "" {
+		headers[HeaderKeyType] = typ
+	}
+
+	for k, v := range extraHeaders {
+		headers[k] = v
 	}
 
 	return headers, nil
