@@ -162,7 +162,7 @@ func Decrypt(recipient *ecdh.PrivateKey, sender *ecdh.PublicKey, compactToken st
 		return nil, fmt.Errorf("failed to parse compact token: %w", err)
 	}
 
-	headers := map[string]string{}
+	headers := map[string]any{}
 	if err = json.Unmarshal(headersBytes, &headers); err != nil {
 		return nil, fmt.Errorf("failed to decode headers: %w", err)
 	}
@@ -171,8 +171,12 @@ func Decrypt(recipient *ecdh.PrivateKey, sender *ecdh.PublicKey, compactToken st
 	if !ok {
 		return nil, errors.New("epk not found in headers")
 	}
+	epkBytes, err := json.Marshal(e)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal epk: %w", err)
+	}
 	epkjwk := &JWK{}
-	if err = json.Unmarshal([]byte(e), epkjwk); err != nil {
+	if err = json.Unmarshal(epkBytes, epkjwk); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal epk: %w", err)
 	}
 
@@ -246,26 +250,22 @@ func getHeaders(
 	sender *ecdh.PrivateKey,
 	epk *ecdh.PrivateKey,
 	extraHeaders map[string]string,
-) (map[string]string, error) {
+) (map[string]any, error) {
 	epkjwk, err := Import(epk.PublicKey())
 	if err != nil {
 		return nil, fmt.Errorf("failed to import epk to jwt: %w", err)
-	}
-	epkstr, err := json.Marshal(epkjwk)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode epk: %w", err)
 	}
 
 	apuBytes := append(epk.PublicKey().Bytes(), sender.PublicKey().Bytes()...)
 	apuHash := sha256.Sum256(apuBytes)
 	apvHash := sha256.Sum256(recipient.Bytes())
 
-	headers := map[string]string{}
+	headers := map[string]any{}
 	headers[HeaderKeyAlg] = KeyEncryptionAlgorithm
 	headers[HeaderKeyEnc] = ContentEncryptionAlgorithm
 	headers[HeaderKeyApu] = base64.RawURLEncoding.EncodeToString(apuHash[:])
 	headers[HeaderKeyApv] = base64.RawURLEncoding.EncodeToString(apvHash[:])
-	headers[HeaderKeyEpk] = string(epkstr)
+	headers[HeaderKeyEpk] = epkjwk
 
 	if skid != "" {
 		headers[HeaderKeySkid] = skid
